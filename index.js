@@ -96,9 +96,9 @@ async function run() {
       // console.log(email)
       // console.log(req.headers.authorization)
       if (email !== decodedEmail) {
-          return res.status(403).send({ message: 'forbidden access' });
-      };
-      
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
       const query = { email: email };
       const booking = await bookingsCollection.find(query).toArray();
       res.send(booking);
@@ -144,36 +144,45 @@ async function run() {
     });
 
     // all user api get
-    app.get('/users', async (req,res) => {
+    app.get("/users", async (req, res) => {
       const query = {};
       const result = await usersCollection.find(query).toArray();
       res.send(result);
     });
 
     // update and make Admin role
-    app.put('/users/:id',verifyJWT, async (req,res) => {
+    app.put("/users/:id", verifyJWT, async (req, res) => {
       const decodedEmail = req.decoded.email;
-      const query = {email: decodedEmail};
+      const query = { email: decodedEmail };
       const user = await usersCollection.findOne(query);
-      
-      if(user?.role !== 'admin'){
-        return res.status(401).send({message : 'forbidden access'})
-      };
+
+      if (user?.role !== "admin") {
+        return res.status(401).send({ message: "forbidden access" });
+      }
 
       const id = req.params.id;
-      const filter = {_id: ObjectId(id)};
+      const filter = { _id: ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
-          role: 'admin'
-        }
+          role: "admin",
+        },
       };
-      const result = await usersCollection.updateOne(filter,updateDoc,options);
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
       res.send(result);
     });
 
-    // 
-
+    // get admin using email
+    app.get("/users/:email", async (req, res) => {
+      const email = req.query.email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      res.send({ isAdmin: user?.role === 'admin' });
+    });
 
   } finally {
   }
