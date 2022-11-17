@@ -4,7 +4,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 // middle wear
 app.use(cors());
@@ -21,6 +21,24 @@ const client = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1,
 });
 
+// jwt function
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  // console.log(authHeader);
+  if (!authHeader) {
+    return res.status(401).send("unauthorized access");
+  }
+  const token = authHeader.split(" ")[1];
+
+  jwt.verify(token, process.env.TOKEN, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "forbidden access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+}
+
 async function run() {
   try {
     const appointmentOptionsCollection = client
@@ -29,10 +47,7 @@ async function run() {
     const bookingsCollection = client
       .db("doctorsPortal")
       .collection("bookings");
-    const usersCollection = client
-      .db("doctorsPortal")
-      .collection("users");
-    
+    const usersCollection = client.db("doctorsPortal").collection("users");
 
     // get appointment data from mongodb
     app.get("/appOptions", async (req, res) => {
@@ -51,34 +66,40 @@ async function run() {
 
       // customize data from optionsCollection
       options.forEach((option) => {
-        const optionBooked = alreadyBooked.filter(book => book.yourTreatment === option.name);
-        const bookedSlot = optionBooked.map(book => book.slot)
-        const remainingSlots = option.slots.filter(slot => !bookedSlot.includes(slot));
-        option.slots = remainingSlots
-        console.log( option.name,remainingSlots.length)
+        const optionBooked = alreadyBooked.filter(
+          (book) => book.yourTreatment === option.name
+        );
+        const bookedSlot = optionBooked.map((book) => book.slot);
+        const remainingSlots = option.slots.filter(
+          (slot) => !bookedSlot.includes(slot)
+        );
+        option.slots = remainingSlots;
+        // console.log(option.name, remainingSlots.length);
       });
 
       res.send(options);
     });
 
+    /***
+     * API Naming Convention
+     * app.get('/bookings')
+     * app.get('/bookings/:id')
+     * app.post('/bookings')
+     * app.patch('/bookings/:id')
+     * app.delete('/bookings/:id')
+     */
 
-     /***
-         * API Naming Convention 
-         * app.get('/bookings')
-         * app.get('/bookings/:id')
-         * app.post('/bookings')
-         * app.patch('/bookings/:id')
-         * app.delete('/bookings/:id')
-        */
-
-
-
-    // dashboard email query 
-    app.get('/bookings', async (req,res) => {
+    // dashboard email query
+    app.get("/bookings", verifyJWT, async (req, res) => {
       const email = req.query.email;
+      const decodedEmail = req.decoded.email;
       // console.log(email)
       // console.log(req.headers.authorization)
-      const query = {email: email};
+      if (email !== decodedEmail) {
+          return res.status(403).send({ message: 'forbidden access' });
+      };
+      
+      const query = { email: email };
       const booking = await bookingsCollection.find(query).toArray();
       res.send(booking);
     });
@@ -88,38 +109,39 @@ async function run() {
       const booking = req.body;
       // console.log(booking);
       const query = {
-        appointmentDate : booking.appointmentDate,
-        email : booking.email,
-        yourTreatment : booking.yourTreatment
+        appointmentDate: booking.appointmentDate,
+        email: booking.email,
+        yourTreatment: booking.yourTreatment,
       };
       const alreadyBooked = await bookingsCollection.find(query).toArray();
-      if(alreadyBooked.length){
-        const message = `you already booking on ${booking.yourTreatment}`
-        return res.send({acknowledge : false , message})
+      if (alreadyBooked.length) {
+        const message = `you already booking on ${booking.yourTreatment}`;
+        return res.send({ acknowledge: false, message });
       }
       const result = await bookingsCollection.insertOne(booking);
       res.send(result);
     });
 
-    // JWT 
-    app.get('/jwt', async (req,res) => {
+    // JWT
+    app.get("/jwt", async (req, res) => {
       const email = req.query.email;
-      const query = {email:email};
+      const query = { email: email };
       const user = await usersCollection.findOne(query);
-      if(user){
-        const token = jwt.sign({email}, process.env.TOKEN,{expiresIn:'2h'});
-        return res.send({accessToken : token});
-      };
-      res.status(403).send({accessToken : ''});
-    })
+      if (user) {
+        const token = jwt.sign({ email }, process.env.TOKEN, {
+          expiresIn: "2h",
+        });
+        return res.send({ accessToken: token });
+      }
+      res.status(403).send({ accessToken: "" });
+    });
 
-    // post from sign up 
-    app.post('/users', async (req,res) => {
+    // post from sign up
+    app.post("/users", async (req, res) => {
       const user = req.body;
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-
   } finally {
   }
 }
