@@ -48,6 +48,7 @@ async function run() {
       .db("doctorsPortal")
       .collection("bookings");
     const usersCollection = client.db("doctorsPortal").collection("users");
+    const doctorsCollection = client.db("doctorsPortal").collection("doctors");
 
     // get appointment data from mongodb
     app.get("/appOptions", async (req, res) => {
@@ -79,6 +80,13 @@ async function run() {
 
       res.send(options);
     });
+
+    // appointment option name api
+    app.get('/appOptionsName', async (req,res) => {
+      const query = {};
+      const result = await appointmentOptionsCollection.find(query).project({name:1}).toArray();
+      res.send(result);
+    })
 
     /***
      * API Naming Convention
@@ -181,9 +189,32 @@ async function run() {
       const email = req.params.email;
       const query = { email };
       const user = await usersCollection.findOne(query);
-      console.log(user,email)
+      // console.log(user,email)
       res.send({ isAdmin: user?.role === 'admin' });
     });
+
+    // post doctor 
+    app.post('/doctors', async (req, res) => {
+      const doctor = req.body;
+      const result = await doctorsCollection.insertOne(doctor);
+      res.send(result);
+    });
+
+    // get all doctors api
+    app.get('/doctors', async (req,res) => {
+      const query = {};
+      const doctors = await doctorsCollection.find(query).toArray();
+      res.send(doctors);
+    });
+
+    // delete doctor api
+    app.delete('/doctors/:id', async (req,res) => {
+      const id = req.params.id;
+      const query = {_id: ObjectId(id)};
+      const result = await doctorsCollection.deleteOne(query);
+      res.send(result);
+      // console.log(result);
+    })
 
   } finally {
   }
