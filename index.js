@@ -5,6 +5,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
+const stripe = require("stripe")(process.env.STRIPE_KEY);
+
+app.use(express.static("public"));
 
 // middle wear
 app.use(cors());
@@ -49,6 +52,7 @@ async function run() {
       .collection("bookings");
     const usersCollection = client.db("doctorsPortal").collection("users");
     const doctorsCollection = client.db("doctorsPortal").collection("doctors");
+    const paymentsCollection = client.db("doctorsPortal").collection("payments");
 
     // NOTE: make sure you use verifyAdmin after verifyJWT
     const verifyAdmin = async (req,res,next) => {
@@ -99,7 +103,7 @@ async function run() {
       const query = {};
       const result = await appointmentOptionsCollection.find(query).project({name:1}).toArray();
       res.send(result);
-    })
+    });
 
     /***
      * API Naming Convention
@@ -143,6 +147,50 @@ async function run() {
       res.send(result);
     });
 
+    // payment option 
+    app.get('/bookings/:id', async (req,res) => {
+      const id = req.params.id;
+      const query = {_id: ObjectId(id)};
+      const result = await bookingsCollection.findOne(query);
+      res.send(result);
+    });
+
+    // payment intention
+    app.post('/create-payment-intent', async (req,res) => {
+      const booking = req.body;
+      const price = booking.price;
+      const amount = price * 100;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        currency: "usd",
+        amount,
+        "payment_method_types": [
+          "card"
+        ],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    // payment post 
+    app.post('/payment', async (req,res) => {
+      const payment = req.body;
+      const result = await paymentsCollection.insertOne(payment);
+
+      const id = payment.bookingId
+            const filter = {_id: ObjectId(id)}
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId
+                }
+            }
+            const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc)
+
+      res.send(result);
+    })
+
     // JWT
     app.get("/jwt", async (req, res) => {
       const email = req.query.email;
@@ -171,6 +219,9 @@ async function run() {
       res.send(result);
     });
 
+    // appointment payment options
+    // app.get('')
+
     // update and make Admin role
     app.put("/users/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -188,6 +239,19 @@ async function run() {
       );
       res.send(result);
     });
+
+    // update price in mongoDB
+    // app.get('/addPrice' , async(req,res) => {
+    //   const filter = {};
+    //   const option = {upsert : true};
+    //   const updateDoc = {
+    //     $set: {
+    //       price : 99
+    //     }
+    //   };
+    //   const result = await appointmentOptionsCollection.updateMany(filter,updateDoc,option);
+    //   res.send(result);
+    // });
 
     // get admin using email
     app.get("/users/:email", async (req, res) => {
